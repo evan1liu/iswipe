@@ -1,4 +1,15 @@
+# Python
 venv/
-.env
 __pycache__/
+*.pyc
+.env
 
+# Mac/DS_Store
+.DS_Store
+
+# Xcode / iOS
+build/
+*.xcodeproj/project.xcworkspace
+*.xcodeproj/xcuserdata
+*.xcworkspace
+DerivedData/

@@ -1,3 +1,6 @@
 imap-tools
 python-dotenv
 msal
+fastapi
+uvicorn
+requests

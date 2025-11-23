@@ -180,7 +180,7 @@ def fetch_emails_from_graph(days: int = 7) -> List[dict]:
         params = {
             "$filter": filter_query,
             "$orderby": "receivedDateTime desc",
-            "$select": "subject,from,receivedDateTime,bodyPreview,body",
+            "$select": "id,subject,from,receivedDateTime,bodyPreview,body",
             "$top": 100  # Fetch 100 per page (max allowed by Graph API)
         }
         
@@ -212,7 +212,77 @@ def fetch_emails_from_graph(days: int = 7) -> List[dict]:
         print(f"Error fetching emails: {e}")
         return all_emails  # Return what we've fetched so far
 
-def process_with_gemini_batch(emails_data: List[dict]) -> List[Email]:
+def categorize_emails(emails_data: List[dict]) -> Dict[str, str]:
+    if not emails_data:
+        return {}
+    
+    print("Categorizing emails...")
+    client = genai.Client(api_key=GEMINI_API_KEY)
+    
+    # Create simplified email list with short IDs to save tokens
+    simplified_emails = []
+    id_map = {} # short_id -> real_id
+    
+    for i, email in enumerate(emails_data):
+        short_id = str(i)
+        real_id = email.get('id')
+        if not real_id:
+            continue 
+            
+        id_map[short_id] = real_id
+        
+        # Extract info
+        sender = email.get('from', {}).get('emailAddress', {}).get('address', 'Unknown')
+        subject = email.get('subject', 'No Subject')
+        preview = email.get('bodyPreview', '')
+        
+        simplified_emails.append({
+            "id": short_id,
+            "from": sender,
+            "subject": subject,
+            "preview": preview
+        })
+        
+    prompt = """
+    You are an intelligent email organizer. I have a list of emails. Please categorize them.
+    
+    Rules:
+    1. Create categories that group similar emails together (e.g., 'Newsletters', 'Work', 'Personal', 'Finance', 'Promotions', 'Updates').
+    2. The total number of unique categories used must NOT exceed 10.
+    3. Assign exactly one category to each email.
+    4. Output a JSON object where keys are the Email IDs (from the input) and values are the Category names.
+    
+    Input Emails:
+    {emails_json}
+    """
+    
+    try:
+        # Using gemini-2.5-flash for speed and large context
+        response = client.models.generate_content(
+            model="gemini-2.5-flash", 
+            contents=prompt.format(emails_json=json.dumps(simplified_emails)),
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                temperature=0.1
+            )
+        )
+        
+        result = json.loads(response.text)
+        
+        # Map back to real IDs
+        category_map = {} # real_id -> category
+        for short_id, category in result.items():
+            if short_id in id_map:
+                category_map[id_map[short_id]] = category
+        
+        print(f"Categorized {len(category_map)} emails into {len(set(category_map.values()))} categories.")
+        return category_map
+        
+    except Exception as e:
+        print(f"Error categorizing emails: {e}")
+        return {}
+
+def process_with_gemini_batch(emails_data: List[dict], category_map: Dict[str, str] = None) -> List[Email]:
     if not emails_data:
         return []
         
@@ -256,6 +326,8 @@ IMPORTANT:
 - Priority for todos: 1=high, 5=medium (default), 9=low
 - all_day should be true only for full-day events (no specific times mentioned)
 - If there are no todos or events, return empty arrays
+
+MOST IMPORTANTLY: IF YOU CREATE A TODO OR AN EVENT, YOU MUST BE 100% SURE IT'S A SINGLE, ACTIONABLE TASK OR EVENT THAT CAN BE ATTENDED TO. IF IT IS NOT, DO NOT INCLUDE IT. DO NOT EVER INCLUDE ANYTHING THAT IS CONSIDERED EVEN SLIGHTLY PROMOTIONAL OR MARKETING MATERIAL.
 
 Email Subject: {subject}
 Email Body: {body}
@@ -481,7 +553,7 @@ Email Body: {body}
                                     preview=original_email.get('bodyPreview', ''),
                                     body_html=original_email.get('body', {}).get('content', ''),
                                     summary=parsed.get('summary'),
-                                    category=parsed.get('category'),
+                                    category=category_map.get(original_email.get('id')) if category_map else parsed.get('category'),
                                     todos=[Todo(**t) for t in parsed.get('todos', [])],
                                     events=[Event(**e) for e in parsed.get('events', [])]
                                 ))
@@ -542,22 +614,20 @@ def load_batch_status():
             return json.load(f)
     return batch_status.copy()
 
-def background_email_refresh():
+def background_email_refresh(raw_emails: List[dict]):
     """Background task to fetch and process emails"""
     try:
-        # 1. Fetch from Graph
-        update_batch_status("fetching", "Fetching emails from Microsoft Graph...")
-        print("Fetching emails from Microsoft Graph...")
-        raw_emails = fetch_emails_from_graph(days=7)
-        print(f"Fetched {len(raw_emails)} emails.")
-        
-        # 2. Process with Gemini
+        # 2. Categorize (now in background to avoid timeout)
+        update_batch_status("processing", f"Categorizing {len(raw_emails)} emails...")
+        category_map = categorize_emails(raw_emails)
+
+        # 3. Process with Gemini
         update_batch_status("processing", f"Processing {len(raw_emails)} emails with Gemini Batch API...")
         print("Processing with Gemini Batch API...")
-        processed = process_with_gemini_batch(raw_emails)
+        processed = process_with_gemini_batch(raw_emails, category_map)
         print(f"Processed {len(processed)} emails.")
         
-        # 3. Save
+        # 4. Save
         save_processed_emails(processed)
         update_batch_status("completed", "Successfully processed emails", len(processed))
             
@@ -584,16 +654,30 @@ def refresh_emails():
             "batch_status": current_status
         }
     
-    # Start background thread
-    update_batch_status("fetching", "Starting email refresh...")
-    thread = threading.Thread(target=background_email_refresh, daemon=True)
-    thread.start()
+    update_batch_status("fetching", "Fetching emails from Microsoft Graph...")
     
-    return {
-        "status": "started",
-        "message": "Email refresh started in background",
-        "batch_status": batch_status
-    }
+    try:
+        # 1. Fetch from Graph (Synchronously)
+        print("Fetching emails from Microsoft Graph...")
+        raw_emails = fetch_emails_from_graph(days=7)
+        print(f"Fetched {len(raw_emails)} emails.")
+        
+        # Start background thread for categorization and batch processing
+        update_batch_status("processing", "Starting categorization and batch processing in background...")
+        thread = threading.Thread(target=background_email_refresh, args=(raw_emails,), daemon=True)
+        thread.start()
+        
+        return {
+            "status": "started",
+            "message": "Email refresh started. Fetching complete. Categorization and processing continuing in background.",
+            "batch_status": batch_status
+        }
+        
+    except Exception as e:
+        error_msg = f"Error during initial refresh steps: {str(e)}"
+        print(error_msg)
+        update_batch_status("error", error_msg)
+        raise HTTPException(status_code=500, detail=error_msg)
 
 @app.get("/refresh-status")
 def get_refresh_status():

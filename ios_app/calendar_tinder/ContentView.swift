@@ -498,6 +498,7 @@ struct ContentView: View {
     
     // Gesture State
     @State private var offset = CGSize.zero
+    @State private var cardScale: CGFloat = 1.0
     
     var body: some View {
         Group {
@@ -680,16 +681,29 @@ struct ContentView: View {
             } else {
                 // Main Interface
                 VStack(spacing: 0) {
-                    // Top Header: Email Subject
-                    // We display the subject of the *current card*
+                // Top Header: Email Subject
+                // We display the subject of the *current card*
+                VStack(spacing: 8) {
                     Text(viewModel.cards[viewModel.currentIndex].emailSubject)
                         .font(.headline)
                         .multilineTextAlignment(.center)
-                        .padding()
-                        .frame(maxWidth: .infinity)
-                        .background(Color(UIColor.secondarySystemBackground))
-                        .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 2)
-                        .zIndex(1) // Keep on top
+                        
+                    if let category = viewModel.cards[viewModel.currentIndex].email.category {
+                        Text(category)
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.blue.opacity(0.7))
+                            .cornerRadius(8)
+                    }
+                }
+                .padding()
+                .frame(maxWidth: .infinity)
+                .background(Color(UIColor.secondarySystemBackground))
+                .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 2)
+                .zIndex(1) // Keep on top
                     
                     Spacer()
                     
@@ -702,8 +716,40 @@ struct ContentView: View {
                                 .offset(y: 10)
                         }
                         
+                        // --- VISUAL INDICATORS ---
+                        // These appear behind the current card and grow/fade in as you swipe
+                        
+                        // 1. Reject Indicator (Left) - Red X
+                        ZStack {
+                            Circle()
+                                .fill(Color.red.opacity(0.15))
+                                .frame(width: 150, height: 150)
+                            Image(systemName: "xmark")
+                                .font(.system(size: 80, weight: .bold))
+                                .foregroundColor(.red)
+                        }
+                        .offset(x: -150) // Position on the left side
+                        .opacity(offset.width < 0 ? Double(-offset.width / 100) : 0)
+                        .scaleEffect(0.8 + (offset.width < 0 ? Double(-offset.width / 300) : 0))
+                        
+                        // 2. Accept Indicator (Right) - Green Check
+                        ZStack {
+                            Circle()
+                                .fill(Color.green.opacity(0.15))
+                                .frame(width: 150, height: 150)
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 80, weight: .bold))
+                                .foregroundColor(.green)
+                        }
+                        .offset(x: 150) // Position on the right side
+                        .opacity(offset.width > 0 ? Double(offset.width / 100) : 0)
+                        .scaleEffect(0.8 + (offset.width > 0 ? Double(offset.width / 300) : 0))
+                        
+                        
                         // Current Card
                         CardView(card: viewModel.cards[viewModel.currentIndex])
+                            .scaleEffect(cardScale) // For "absorb" animation
+                            .opacity(cardScale)     // Fade out as it absorbs
                             .offset(x: offset.width, y: 0)
                             .rotationEffect(.degrees(Double(offset.width / 20)))
                             .gesture(
@@ -794,12 +840,17 @@ struct ContentView: View {
             
             await MainActor.run { [weak currentViewModel] in
                 guard let vm = currentViewModel else { return }
-                withAnimation {
-                    self.offset = CGSize(width: 500, height: 0)
+                // Absorb Animation: Move to right icon position and shrink
+                withAnimation(.easeOut(duration: 0.3)) {
+                    self.offset = CGSize(width: 150, height: 0) // Move to checkmark
+                    self.cardScale = 0.01 // Shrink to almost nothing
                 }
+                
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak vm] in
                     vm?.removeCurrentCard()
+                    // Reset state instantly for next card
                     self.offset = .zero
+                    self.cardScale = 1.0
                 }
             }
         }
@@ -808,12 +859,17 @@ struct ContentView: View {
     private func handleSwipeLeft() {
         let currentViewModel = viewModel // Capture reference
         
-        withAnimation {
-            offset = CGSize(width: -500, height: 0)
+        // Absorb Animation: Move to left icon position and shrink
+        withAnimation(.easeOut(duration: 0.3)) {
+            self.offset = CGSize(width: -150, height: 0) // Move to X mark
+            self.cardScale = 0.01 // Shrink
         }
+        
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak currentViewModel] in
             currentViewModel?.removeCurrentCard()
+            // Reset state instantly for next card
             self.offset = .zero
+            self.cardScale = 1.0
         }
     }
 }

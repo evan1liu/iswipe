@@ -132,6 +132,7 @@ class OperationHistory: ObservableObject {
 
 class EmailViewModel: ObservableObject {
     @Published var cards: [EmailCard] = []
+    @Published var allCards: [EmailCard] = []  // Store all cards before filtering
     @Published var currentIndex: Int = 0
     @Published var isLoading = false
     @Published var isRefreshing = false
@@ -139,6 +140,7 @@ class EmailViewModel: ObservableObject {
     @Published var statusMessage: String = ""
     @Published var batchStatus: String = "idle"  // idle, fetching, processing, completed, error
     @Published var slideDirection: SlideDirection = .forward
+    @Published var selectedCategory: String? = nil  // nil means show all categories
 
     // Auth State
     @Published var isLoggedIn = false
@@ -340,10 +342,68 @@ class EmailViewModel: ObservableObject {
             newCards.append(EmailCard(email: email))
         }
 
-        self.cards = newCards
+        self.allCards = newCards
+        
+        // Automatically select the first category (most popular)
+        let categoryCounts = Dictionary(grouping: allCards, by: { $0.email.category ?? "Uncategorized" })
+            .mapValues { $0.count }
+            .sorted { $0.value > $1.value }
+        
+        if let firstCategory = categoryCounts.first?.key {
+            self.selectedCategory = firstCategory
+        } else {
+            self.selectedCategory = nil
+        }
+        
+        applyCategory()
+    }
+    
+    func applyCategory() {
+        if let category = selectedCategory {
+            // Filter cards by selected category
+            cards = allCards.filter { $0.email.category == category }
+        } else {
+            // Show all cards if no category selected
+            cards = allCards
+        }
+        
         self.currentIndex = 0
         self.isInSubcardMode = false
         self.currentSubcardIndex = 0
+    }
+    
+    func getCategoryCounts() -> [(category: String, count: Int)] {
+        let grouped = Dictionary(grouping: allCards, by: { $0.email.category ?? "Uncategorized" })
+        return grouped.map { (category: $0.key, count: $0.value.count) }
+            .sorted { $0.count > $1.count }
+    }
+    
+    func selectCategory(_ category: String?) {
+        selectedCategory = category
+        applyCategory()
+    }
+    
+    func isLastInCategory() -> Bool {
+        guard let currentCategory = selectedCategory else { return false }
+        
+        // Check if current card is the last one in the filtered cards
+        return currentIndex >= cards.count - 1
+    }
+    
+    func advanceToNextCategory() {
+        // Get all categories sorted by count
+        let categoryCounts = getCategoryCounts()
+        
+        guard let currentCategory = selectedCategory,
+              let currentIndex = categoryCounts.firstIndex(where: { $0.category == currentCategory }),
+              currentIndex < categoryCounts.count - 1 else {
+            // No next category, show all or stay on current
+            return
+        }
+        
+        // Move to next category
+        let nextCategory = categoryCounts[currentIndex + 1].category
+        selectCategory(nextCategory)
     }
     
     func nextCard() {
@@ -363,9 +423,16 @@ class EmailViewModel: ObservableObject {
     func removeCurrentCard() {
         guard !cards.isEmpty && currentIndex < cards.count else { return }
         cards.remove(at: currentIndex)
+        
         // If we removed the last card, adjust index
         if currentIndex >= cards.count && currentIndex > 0 {
             currentIndex -= 1
+        }
+        
+        // Check if we've finished all cards in this category
+        if cards.isEmpty {
+            // Move to next category
+            advanceToNextCategory()
         }
     }
 
@@ -782,6 +849,9 @@ struct ContentView: View {
     @State private var showParticles = false
     @State private var particleColor: Color = .red
     @State private var showConfetti = false
+    
+    // Category filtering
+    @State private var showCategorySelector = false
 
     enum DisplayMode: String, CaseIterable {
         case swipe = "Swipe"
@@ -798,6 +868,16 @@ struct ContentView: View {
         }
         .onAppear {
             viewModel.checkAuth()
+        }
+        .sheet(isPresented: $showCategorySelector) {
+            CategorySelectorView(
+                categories: viewModel.getCategoryCounts(),
+                selectedCategory: viewModel.selectedCategory,
+                onSelect: { category in
+                    viewModel.selectCategory(category)
+                    showCategorySelector = false
+                }
+            )
         }
     }
 
@@ -1061,17 +1141,33 @@ struct ContentView: View {
 
     var swipeView: some View {
         VStack(spacing: 0) {
-            // Category label
+            // Category label - tappable
             if !viewModel.cards.isEmpty {
-                Text(viewModel.cards[viewModel.currentIndex].email.category ?? "Uncategorized")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
+                Button(action: {
+                    showCategorySelector = true
+                }) {
+                    HStack(spacing: 4) {
+                        Text(viewModel.selectedCategory ?? "All Categories")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                        
+                        if viewModel.selectedCategory != nil {
+                            Text("(\(viewModel.cards.count))")
+                                .font(.caption2)
+                                .fontWeight(.semibold)
+                        }
+                        
+                        Image(systemName: "chevron.down")
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                    }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .background(categoryColor(for: viewModel.cards[viewModel.currentIndex].email.category ?? "Uncategorized").opacity(0.2))
                     .foregroundColor(categoryColor(for: viewModel.cards[viewModel.currentIndex].email.category ?? "Uncategorized"))
                     .cornerRadius(16)
-                    .padding(.bottom, 8)
+                }
+                .padding(.bottom, 8)
             }
 
             VStack(spacing: 0) {
@@ -1496,6 +1592,91 @@ struct ContentView: View {
                 offset = .zero
                 showConfetti = false
             }
+        }
+    }
+}
+
+// MARK: - Category Selector View
+
+struct CategorySelectorView: View {
+    let categories: [(category: String, count: Int)]
+    let selectedCategory: String?
+    let onSelect: (String?) -> Void
+    
+    @Environment(\.dismiss) var dismiss
+    
+    var body: some View {
+        NavigationView {
+            List {
+                // Individual categories
+                ForEach(categories, id: \.category) { item in
+                    Button(action: {
+                        onSelect(item.category)
+                    }) {
+                        HStack {
+                            // Category indicator
+                            Circle()
+                                .fill(categoryColor(for: item.category))
+                                .frame(width: 12, height: 12)
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(item.category)
+                                    .font(.headline)
+                                    .foregroundColor(.primary)
+                                Text("\(item.count) email\(item.count == 1 ? "" : "s")")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            Spacer()
+                            
+                            // Count badge
+                            Text("\(item.count)")
+                                .font(.caption)
+                                .fontWeight(.bold)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(categoryColor(for: item.category))
+                                .cornerRadius(12)
+                            
+                            if selectedCategory == item.category {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(.blue)
+                                    .font(.title3)
+                                    .padding(.leading, 8)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+            }
+            .navigationTitle("Switch Category")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+    
+    func categoryColor(for category: String) -> Color {
+        switch category.lowercased() {
+        case "work":
+            return .blue
+        case "personal":
+            return .green
+        case "finance":
+            return .orange
+        case "travel":
+            return .purple
+        case "shopping":
+            return .pink
+        default:
+            return .gray
         }
     }
 }

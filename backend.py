@@ -30,7 +30,7 @@ app.add_middleware(
 # Using "Microsoft Graph PowerShell" Client ID
 CLIENT_ID = "14d82eec-204b-4c2f-b7e8-296a70dab67e"
 TENANT_ID = "common"
-SCOPES = ["User.Read", "Mail.Read"]
+SCOPES = ["User.Read", "Mail.ReadWrite"]  # Changed from Mail.Read to Mail.ReadWrite for delete permissions
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 TOKEN_CACHE_FILE = "token_cache.bin"
 
@@ -546,9 +546,9 @@ Email Body: {body}
                             if original_email:
                                 from_addr = original_email.get('from', {}).get('emailAddress', {}).get('address', 'Unknown')
                                 
-                                # Create Email object
+                                # Create Email object - USE REAL GRAPH API MESSAGE ID
                                 processed_emails.append(Email(
-                                    id=str(uuid.uuid4()),
+                                    id=original_email.get('id', str(uuid.uuid4())),  # Use Graph API message ID
                                     from_addr=from_addr,
                                     subject=original_email.get('subject', 'No Subject'),
                                     date=original_email.get('receivedDateTime', ''),
@@ -693,8 +693,11 @@ def get_processed_emails():
 @app.delete("/delete-email/{email_id}")
 def delete_email(email_id: str):
     """Delete an email from Outlook via Microsoft Graph API"""
+    print(f"Attempting to delete email with ID: {email_id}")
+    
     token = get_graph_token()
     if not token:
+        print("ERROR: No authentication token available")
         raise HTTPException(status_code=401, detail="Authentication failed")
 
     endpoint = f"https://graph.microsoft.com/v1.0/me/messages/{email_id}"
@@ -704,11 +707,22 @@ def delete_email(email_id: str):
     }
 
     try:
+        print(f"Sending DELETE request to: {endpoint}")
         response = requests.delete(endpoint, headers=headers)
+        print(f"Response status code: {response.status_code}")
+        print(f"Response body: {response.text}")
+        
         response.raise_for_status()
+        print("Email deleted successfully!")
         return {"success": True, "message": "Email deleted successfully"}
+    except requests.exceptions.HTTPError as e:
+        error_msg = f"HTTP Error: {e.response.status_code} - {e.response.text}"
+        print(f"ERROR deleting email: {error_msg}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete email: {error_msg}")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to delete email: {str(e)}")
+        error_msg = str(e)
+        print(f"ERROR deleting email: {error_msg}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete email: {error_msg}")
 
 @app.post("/restore-email/{email_id}")
 def restore_email(email_id: str):

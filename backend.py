@@ -10,8 +10,7 @@ import threading
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
-from google import genai
-from google.genai import types
+import google.generativeai as genai
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -323,8 +322,8 @@ Email Body: {body}
     try:
         # Upload file - MUST specify mime_type for JSONL
         batch_file = client.files.upload(
-            file=jsonl_filename,
-            config=types.UploadFileConfig(mime_type='application/json')
+            path=jsonl_filename,
+            mime_type='application/json'
         )
         
         # Create batch job
@@ -603,6 +602,60 @@ def get_refresh_status():
 @app.get("/processed-emails", response_model=List[Email])
 def get_processed_emails():
     return load_processed_emails()
+
+@app.delete("/delete-email/{email_id}")
+def delete_email(email_id: str):
+    """Delete an email from Outlook via Microsoft Graph API"""
+    token = get_graph_token()
+    if not token:
+        raise HTTPException(status_code=401, detail="Authentication failed")
+
+    endpoint = f"https://graph.microsoft.com/v1.0/me/messages/{email_id}"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+
+    try:
+        response = requests.delete(endpoint, headers=headers)
+        response.raise_for_status()
+        return {"success": True, "message": "Email deleted successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete email: {str(e)}")
+
+@app.post("/restore-email/{email_id}")
+def restore_email(email_id: str):
+    """Restore a deleted email from Deleted Items folder back to Inbox"""
+    token = get_graph_token()
+    if not token:
+        raise HTTPException(status_code=401, detail="Authentication failed")
+
+    # Move email from Deleted Items to Inbox
+    # First, get the Inbox folder ID
+    inbox_endpoint = "https://graph.microsoft.com/v1.0/me/mailFolders/inbox"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+
+    try:
+        # Get Inbox folder ID
+        inbox_response = requests.get(inbox_endpoint, headers=headers)
+        inbox_response.raise_for_status()
+        inbox_id = inbox_response.json().get("id")
+
+        # Move the message to Inbox
+        move_endpoint = f"https://graph.microsoft.com/v1.0/me/messages/{email_id}/move"
+        move_payload = {
+            "destinationId": inbox_id
+        }
+
+        move_response = requests.post(move_endpoint, headers=headers, json=move_payload)
+        move_response.raise_for_status()
+
+        return {"success": True, "message": "Email restored successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to restore email: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

@@ -79,6 +79,8 @@ class Email(BaseModel):
     date: str
     preview: str
     body_html: str
+    summary: Optional[str] = None
+    category: Optional[str] = None
     todos: List[Todo] = []
     events: List[Event] = []
 
@@ -221,11 +223,14 @@ def process_with_gemini_batch(emails_data: List[dict]) -> List[Email]:
     email_map = {} # Map request ID to email data
     
     prompt_template = """
-Analyze the following email content and extract any specific Tasks (Todos) and Calendar Events.
+Analyze the following email content and extract:
+1. A brief summary (1-2 sentences)
+2. Any specific Tasks (Todos) and Calendar Events
 
 Output strictly in JSON format matching these exact schemas:
 
 {{
+  "summary": "Brief 1-2 sentence summary of the email",
   "todos": [{{
       "title": "short task title",
       "notes": "detailed task description/notes",
@@ -243,13 +248,14 @@ Output strictly in JSON format matching these exact schemas:
 }}
 
 IMPORTANT:
+- Summary should be concise and capture the main point of the email
 - Use ISO 8601 date format with timezone (e.g., "2024-11-25T14:00:00Z")
 - ONLY create an event if BOTH title AND start_date are clearly present in the email
 - end_date is optional - if not specified, set to null (system will default to 1 hour duration)
 - For location, prefer 'TBD' over null
 - Priority for todos: 1=high, 5=medium (default), 9=low
 - all_day should be true only for full-day events (no specific times mentioned)
-- If there are no todos or events, return empty json object {{}}
+- If there are no todos or events, return empty arrays
 
 Email Subject: {subject}
 Email Body: {body}
@@ -469,11 +475,13 @@ Email Body: {body}
                                 # Create Email object
                                 processed_emails.append(Email(
                                     id=str(uuid.uuid4()),
-                from_addr=from_addr,
+                                    from_addr=from_addr,
                                     subject=original_email.get('subject', 'No Subject'),
                                     date=original_email.get('receivedDateTime', ''),
                                     preview=original_email.get('bodyPreview', ''),
                                     body_html=original_email.get('body', {}).get('content', ''),
+                                    summary=parsed.get('summary'),
+                                    category=parsed.get('category'),
                                     todos=[Todo(**t) for t in parsed.get('todos', [])],
                                     events=[Event(**e) for e in parsed.get('events', [])]
                                 ))

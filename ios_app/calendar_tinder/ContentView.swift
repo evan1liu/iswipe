@@ -38,6 +38,8 @@ struct Email: Identifiable, Codable {
     let date: String
     let preview: String
     let body_html: String
+    let summary: String?
+    let category: String?
     let todos: [Todo]
     let events: [Event]
     
@@ -48,6 +50,8 @@ struct Email: Identifiable, Codable {
         case date
         case preview
         case body_html
+        case summary
+        case category
         case todos
         case events
     }

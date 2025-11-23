@@ -4,3 +4,5 @@ msal
 fastapi
 uvicorn
 requests
+pytest
+httpx

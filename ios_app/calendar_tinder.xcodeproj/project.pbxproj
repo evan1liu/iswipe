@@ -29,9 +29,22 @@
 		854BD7232ED248CA00443FA4 /* calendar_tinderUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = calendar_tinderUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		CE0135ED2ED2814B00B960F5 /* Exceptions for "calendar_tinder" folder in "calendar_tinder" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 854BD70B2ED248C900443FA4 /* calendar_tinder */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		854BD70E2ED248C900443FA4 /* calendar_tinder */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				CE0135ED2ED2814B00B960F5 /* Exceptions for "calendar_tinder" folder in "calendar_tinder" target */,
+			);
 			path = calendar_tinder;
 			sourceTree = "<group>";
 		};
@@ -395,8 +408,14 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2R3YQGKU4C;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "calendar-tinder-Info.plist";
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Calendar Tinder needs full calendar access to create and manage events from your emails.";
+				INFOPLIST_KEY_NSCalendarsUsageDescription = "Calendar Tinder needs access to your calendar to add accepted events from your emails.";
+				INFOPLIST_KEY_NSRemindersFullAccessUsageDescription = "Calendar Tinder needs full reminders access to create and manage to-dos from your emails.";
+				INFOPLIST_KEY_NSRemindersUsageDescription = "Calendar Tinder needs access to your reminders to create to-dos from your emails.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -426,8 +445,14 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2R3YQGKU4C;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "calendar-tinder-Info.plist";
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Calendar Tinder needs full calendar access to create and manage events from your emails.";
+				INFOPLIST_KEY_NSCalendarsUsageDescription = "Calendar Tinder needs access to your calendar to add accepted events from your emails.";
+				INFOPLIST_KEY_NSRemindersFullAccessUsageDescription = "Calendar Tinder needs full reminders access to create and manage to-dos from your emails.";
+				INFOPLIST_KEY_NSRemindersUsageDescription = "Calendar Tinder needs access to your reminders to create to-dos from your emails.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

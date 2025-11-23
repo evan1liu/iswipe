@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Calendar Permissions -->
+    <key>NSCalendarsUsageDescription</key>
+    <string>Calendar Tinder needs access to your calendar to add accepted events from your emails.</string>
+
+    <key>NSCalendarsFullAccessUsageDescription</key>
+    <string>Calendar Tinder needs full calendar access to create and manage events from your emails.</string>
+
+    <!-- Reminder Permissions -->
+    <key>NSRemindersUsageDescription</key>
+    <string>Calendar Tinder needs access to your reminders to create to-dos from your emails.</string>
+
+    <key>NSRemindersFullAccessUsageDescription</key>
+    <string>Calendar Tinder needs full reminders access to create and manage to-dos from your emails.</string>
+
+    <!-- URL Scheme for Microsoft Auth (if needed) -->
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeRole</key>
+            <string>Editor</string>
+            <key>CFBundleURLName</key>
+            <string>com.yourapp.calendar-tinder</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>msauth.com.yourapp.calendar-tinder</string>
+            </array>
+        </dict>
+    </array>
+
+    <!-- Instructions -->
+    <!--
+    To use this template:
+    1. Open your Xcode project
+    2. Select the calendar_tinder target
+    3. Go to the Info tab
+    4. Add each key-value pair from this template
+
+    Alternatively, you can directly edit the Info.plist file in your project
+    and copy the relevant sections above.
+    -->
+</dict>
+</plist>
